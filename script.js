@@ -3,8 +3,11 @@
    Organizado por funcionalidade. Nenhum dado é enviado a servidores externos.
    ========================================================================== */
 
-// Número de WhatsApp da clínica (substituir pelo número real)
-const whatsappNumber = "5547999999999";
+// Número de WhatsApp da clínica
+const whatsappNumber = "5547999468486";
+
+// E-mail que recebe as solicitações do formulário de contato
+const contactEmail = "gustavomenger1@gmail.com";
 
 document.addEventListener("DOMContentLoaded", () => {
   initHeaderScroll();
@@ -401,7 +404,9 @@ function initContactForm() {
     });
   });
 
-  form.addEventListener("submit", (e) => {
+  const submitBtn = form.querySelector('button[type="submit"]');
+
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     let isFormValid = true;
@@ -415,17 +420,79 @@ function initContactForm() {
       return;
     }
 
-    // Nenhum dado é enviado para servidores externos — projeto apenas frontend
+    const dadosFormulario = {
+      nome: fields.nome.input.value.trim(),
+      email: fields.email.input.value.trim(),
+      telefone: fields.telefone.input.value.trim(),
+      tratamento: fields.tratamento.input.selectedOptions[0].text,
+      data: fields.data.input.value,
+      mensagem: fields.mensagem.input.value.trim(),
+    };
+
+    submitBtn.disabled = true;
+    const textoOriginalBtn = submitBtn.textContent;
+    submitBtn.textContent = "Enviando...";
+
+    try {
+      await sendEmailNotification(dadosFormulario);
+    } catch (error) {
+      // Mesmo se o e-mail falhar, seguimos com o WhatsApp para não travar o atendimento
+      console.error("Não foi possível enviar o e-mail:", error);
+    }
+
+    openWhatsapp(buildWhatsappMessage(dadosFormulario));
+
     successMessage.classList.add("visible");
     form.reset();
-
     successMessage.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    // Esconde a mensagem de sucesso após alguns segundos
+    submitBtn.disabled = false;
+    submitBtn.textContent = textoOriginalBtn;
+
     setTimeout(() => {
       successMessage.classList.remove("visible");
     }, 6000);
   });
+}
+
+/* Monta a mensagem do WhatsApp com os dados preenchidos no formulário */
+function buildWhatsappMessage(dados) {
+  return (
+    `Olá! Gostaria de agendar uma consulta na Sorriso Prime.\n\n` +
+    `Nome: ${dados.nome}\n` +
+    `Telefone: ${dados.telefone}\n` +
+    `Tratamento: ${dados.tratamento}\n` +
+    `Data desejada: ${dados.data}\n` +
+    `Mensagem: ${dados.mensagem}`
+  );
+}
+
+/* Envia os dados do formulário por e-mail usando o FormSubmit (serviço gratuito
+   para sites estáticos, sem necessidade de servidor próprio).
+   IMPORTANTE: no primeiro envio, o FormSubmit manda um e-mail de confirmação
+   para contactEmail — é preciso clicar no link de confirmação uma única vez
+   para ativar o recebimento automático das próximas mensagens. */
+async function sendEmailNotification(dados) {
+  const response = await fetch(`https://formsubmit.co/ajax/${contactEmail}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      _subject: "Nova solicitação de consulta — Sorriso Prime",
+      Nome: dados.nome,
+      "E-mail": dados.email,
+      Telefone: dados.telefone,
+      Tratamento: dados.tratamento,
+      "Data desejada": dados.data,
+      Mensagem: dados.mensagem,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Falha no envio do e-mail");
+  }
 }
 
 /* --------------------------------------------------------------------------
